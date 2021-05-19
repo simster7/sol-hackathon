@@ -3,7 +3,7 @@
 ## Background
 A perpetual swap is a derivative that tracks the price of an underlying asset or index by enforcing constant settlements with interest at specific funding interval. Each swap contract has a long party and a short party. Intuitively, the perpetual swap should incentivize individuals to go long (i.e. buy) when the swap trades below the index price, and it should incentivize individuals to go short (i.e. sell) when the swap trades above the index price. This mechanism is made possible by settlements.
 
-These settlements take in the _mark price_ (the fair price of a security at particular reference point in time) of the both the underlying index and the perpetual swap. If the index is marked at $I$, the perpetual swap is marked at $P$, the funding rate is $F$% per day, and the funding interval is $T$ days: the payout protocol is roughly as follows:
+These settlements take in the _mark price_ (the fair price of a security at particular reference point in time) of the both the underlying index and the perpetual swap. If the index is marked at _I_, the perpetual swap is marked at _P_, the funding rate is _F_% per day, and the funding interval is _T_ days: the payout protocol is roughly as follows:
 
 ```
 if P < I:
@@ -12,7 +12,7 @@ else if P > I:
 	long transfers (P - I) * F * T to short
 ```
 
-(A subtle but interesting note is that the payoff structure of a perpetual swap mirrors that of a future -- the time to expiration can be adjusted by manipulating $F$ and $T$)
+(A subtle but interesting note is that the payoff structure of a perpetual swap mirrors that of a future -- the time to expiration can be adjusted by manipulating _F_ and _T_)
 
 This allows for 2 key features:
 1. **Leverage**: Participants in the swap don't have to post the full collateral in order to enter their desired positions, allowing them to lever up potential gains (and losses). One important caveat of this feature is that this forces the swap contract to have a reasonably sophisticated liquidation protocol in order to stay solvent.
@@ -84,7 +84,7 @@ This is called whenever:
 2. Someone with no existing position fills a newly created order.
 
 **Example:**
-- Person A places a bid at 100$
+- Person A places a bid at 100_
    - Under the hood `InitializePerpetualSwap` is called followed by `InitializeSide` where the accounts being updated are the `long_margin_account` and the `long_account`
  - Person B (without an existing long position) hits (i.e. sells) Person A's bid
    - `InitializeSide` is called again, and the `short_margin_account` and `short_account` fields are updated
@@ -125,7 +125,7 @@ amount: u64
 The scenarios are the same as TransferLong so I won't list them again here.
 
 ### TryToLiquidate
-This one is super complicated. First we need figure out which party is at risk of liquidation by checking `mark_price - index_price`. If the at-risk party $A$ is above margin, do nothing. Otherwise, we transfer `mark_price - index_price` from $A$'s busted margin account to the other user's ($B$'s) account. Then we transfer a fee from $A$'s liquidated margin account to the insurance fund. Afterwards, we empty $B$'s margin into $B$'s user account. Finally, we empty the $A$'s margin account into $B$'s account. In the case that there are insufficient funds, this will need covered by the insurance fund. **There is undefined behavior if the insurance fund is dry.** 
+This one is super complicated. First we need figure out which party is at risk of liquidation by checking `mark_price - index_price`. If the at-risk party _A_ is above margin, do nothing. Otherwise, we transfer `mark_price - index_price` from _A_'s busted margin account to the other user's (_B_'s) account. Then we transfer a fee from _A_'s liquidated margin account to the insurance fund. Afterwards, we empty _B_'s margin into _B_'s user account. Finally, we empty the _A_'s margin account into _B_'s account. In the case that there are insufficient funds, this will need covered by the insurance fund. **There is undefined behavior if the insurance fund is dry.** 
 
 #### Notes
 - I think we might have to close/delete all of the accounts after all of the transfers are completed.
@@ -134,7 +134,7 @@ This one is super complicated. First we need figure out which party is at risk o
 ### TransferFunds
 This is essentially the implementation described in the Background section!
 
-First, we figure out how much is owed by looking at `mark_price - index_price` ($P - I$). Then, we find the amount of time that has elapsed since `reference_time` ($T$ days). The amount owed is $|P - I| * F * T$ where $F$ is the funding rate. We then transfer that amount between the appropriate funds. If there are insufficient funds, there might be a need to liquidate, but **I'm assuming that there are enough incentives in place to perform the liquidation before that happens.**
+First, we figure out how much is owed by looking at `mark_price - index_price` (_P - I_). Then, we find the amount of time that has elapsed since `reference_time` (_T_ days). The amount owed is _|P - I| * F * T_ where _F_ is the funding rate. We then transfer that amount between the appropriate funds. If there are insufficient funds, there might be a need to liquidate, but **I'm assuming that there are enough incentives in place to perform the liquidation before that happens.**
 
 ### UpdateIndexPrice / UpdateMarkPrice
 Arguments:
@@ -145,3 +145,4 @@ price: u64
 I think UpdateIndexPrice and UpdateMarkPrice might be unnecessary, but I haven't quite figured out how to use the on-chain oracle. I figured the easiest way to implement this without an oracle (seems VERY sketchy) would be to give it a `price` parameter and just have that update the index/mark price in the PerpetualSwap account data field. This is mainly just a placeholder until I figure out how to use the oracle.
 
 Additionally, both of these functions should be atomic (otherwise, a sneaky arbitrageur can play games to try to randomly liquidate people).
+
