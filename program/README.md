@@ -84,7 +84,7 @@ This is called whenever:
 2. Someone with no existing position fills a newly created order.
 
 **Example:**
-- Person A places a bid at 100_
+- Person A places a bid at $100
    - Under the hood `InitializePerpetualSwap` is called followed by `InitializeSide` where the accounts being updated are the `long_margin_account` and the `long_account`
  - Person B (without an existing long position) hits (i.e. sells) Person A's bid
    - `InitializeSide` is called again, and the `short_margin_account` and `short_account` fields are updated
