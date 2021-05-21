@@ -177,13 +177,9 @@ impl Processor {
                 msg!("Instruction: TransferFunds");
                 Self::process_transfer_funds(program_id, accounts)
             }
-            PerpetualSwapInstruction::UpdateMarkPrice { price } => {
-                msg!("Instruction: UpdateMarkPrice");
-                Self::process_update_mark_price(program_id, price, accounts)
-            }
-            PerpetualSwapInstruction::UpdateIndexPrice { price } => {
-                msg!("Instruction: UpdateIndexPrice");
-                Self::process_update_index_price(program_id, price, accounts)
+            PerpetualSwapInstruction::UpdatePrices { index_price, mark_price } => {
+                msg!("Instruction: UpdatePrices");
+                Self::process_update_prices(program_id, index_price, mark_price, accounts)
             }
         }
     }
@@ -806,9 +802,10 @@ impl Processor {
         Ok(())
     }
 
-    pub fn process_update_mark_price(
-        program_id: &Pubkey,
-        price: f64,
+    pub fn process_update_prices(
+        program_id:&Pubkey,
+        index_price: f64,
+        mark_price: f64,
         accounts: &[AccountInfo],
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
@@ -832,37 +829,9 @@ impl Processor {
             return Err(PerpetualSwapError::IncorrectTokenProgramId.into());
         }
 
-        perpetual_swap.mark_price = price;
+        perpetual_swap.mark_price  = mark_price;
+        perpetual_swap.index_price = index_price;
         Ok(())
     }
 
-    pub fn process_update_index_price(
-        program_id: &Pubkey,
-        price: f64,
-        accounts: &[AccountInfo],
-    ) -> ProgramResult {
-        let account_info_iter = &mut accounts.iter();
-        let perpetual_swap_info = next_account_info(account_info_iter)?;
-        let authority_info = next_account_info(account_info_iter)?;
-        let token_program_info = next_account_info(account_info_iter)?;
-        let mut perpetual_swap = PerpetualSwap::try_from_slice(&perpetual_swap_info.data.borrow())?;
-
-        if !perpetual_swap.is_initialized() {
-            return Err(PerpetualSwapError::AccountNotInitialized.into());
-        }
-        if perpetual_swap_info.owner != program_id {
-            return Err(ProgramError::IncorrectProgramId);
-        }
-        if *authority_info.key
-            != Self::authority_id(program_id, perpetual_swap_info.key, perpetual_swap.nonce)?
-        {
-            return Err(PerpetualSwapError::InvalidProgramAddress.into());
-        }
-        if *token_program_info.key != perpetual_swap.token_program_id {
-            return Err(PerpetualSwapError::IncorrectTokenProgramId.into());
-        }
-
-        perpetual_swap.index_price = price;
-        Ok(())
-    }
 }
