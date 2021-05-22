@@ -95,18 +95,11 @@ pub enum PerpetualSwapInstruction {
     /// 1. `[]` swap authority
     /// 2. `[]` user transfer authority
     /// 3. `[]` The token program
-    UpdateIndexPrice {
-        price: f64, // Placeholder instruction, will delete
+    UpdatePrices {
+        index_price: f64,
+        mark_price: f64,
     },
 
-    /// Accounts expected:
-    /// 0. `[]` PerpetualSwap
-    /// 1. `[]` swap authority
-    /// 2. `[]` user transfer authority
-    /// 3. `[]` The token program
-    UpdateMarkPrice {
-        price: f64, // Placeholder instruction, will delete
-    },
 }
 
 impl PerpetualSwapInstruction {
