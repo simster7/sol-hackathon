@@ -3,19 +3,11 @@ use std::convert::TryInto;
 
 use crate::error::PerpetualSwapError;
 pub enum PerpetualSwapInstruction {
-    /// Accounts expected:
-    /// 0. `[w, signer]` New PerpetrualSwap to create.
-    /// 1. `[]` swap authority derived from `create_program_address(&[Token-swap account])`
-    /// 2. `[]` long margin acount
-    /// 3. `[]` long user acount
-    /// 4. `[]` short margin acount
-    /// 5. `[]` short user acount
-    /// 6. `[w]` Pool Token Mint. Must be empty, owned by swap authority.
-    /// 7. `[w]` Pool Token Account to deposit trading and withdraw fees.
-    /// Must be empty, not owned by swap authority
-    /// 8. `[w]` Pool Token Account to deposit the initial pool token
-    /// supply.  Must be empty, not owned by swap authority.
-    /// 9. '[]` Token program id
+
+    /*
+        Should called only one time. Creates the global Pool State for the perpetual swap
+        Might interact with Serum
+    */
     InitializePerpetualSwap {
         nonce: u8,
         funding_rate: f64,
@@ -23,78 +15,42 @@ pub enum PerpetualSwapInstruction {
         liquidation_threshold: f64,
     },
 
-    /// Accounts expected:
-    /// 0. `[w]` PerpetualSwap
-    /// 1. `[]` swap authority
-    /// 2. `[]` user transfer authority
-    /// 3. `[w, s]` The account of the person depositing to the margin account
-    /// 4. `[w]` The margin account
-    /// 5. `[]` The token program
-    InitializeSide { amount_to_deposit: u64 },
+    /*
+        All Position updating logic will be handled in this instruction
+        Might interact with Serum
+    */
+    UpdatePosition {
+        position: f64,
+    },
 
-    /// Accounts expected:
-    /// 0. `[]` PerpetualSwap
-    /// 1. `[]` swap authority
-    /// 2. `[]` user transfer authority
-    /// 3. `[w, s]` The account of the person depositing to the margin account
-    /// 4. `[w]` The margin account
-    /// 5. `[]` The token program
+    /*
+        Increases the `collateral` in an AccountState. The effect of this is decreasing leverage
+    */
     DepositToMargin { amount_to_deposit: u64 },
 
-    /// Accounts expected:
-    /// 0. `[]` PerpetualSwap
-    /// 1. `[]` swap authority
-    /// 2. `[]` user transfer authority
-    /// 3. `[w]` The account of the person withrawing from the margin account
-    /// 4. `[w, s]` The margin account
-    /// 5. `[]` The token program
+    /*
+        Decreases the `collateral` in an AccountState. The effect of this is increasing leverage
+    */
     WithdrawFromMargin { amount_to_withdraw: u64 },
 
-    /// Accounts expected:
-    /// 0. `[]` PerpetualSwap
-    /// 1. `[]` swap authority
-    /// 2. `[]` user transfer authority
-    /// 3. `[w]` The margin account of the long party who is selling
-    /// 4. `[w]` The user account of the long party who is selling
-    /// 5. `[w]` The account of the party who is buying
-    /// 6. `[]` The token program
-    TransferLong { amount: u64 },
-
-    /// Accounts expected:
-    /// 0. `[w]` PerpetualSwap
-    /// 1. `[]` swap authority
-    /// 2. `[]` user transfer authority
-    /// 3. `[w]` The account of the short party who is buying
-    /// 4. `[w]` The account of the party who is selling
-    /// 5. `[w]` The new margin account of the party who is selling
-    /// 7. `[]` The token program
-    TransferShort { amount: u64 },
-
-    /// Accounts expected:
-    /// 0. `[]` PerpetualSwap
-    /// 1. `[]` swap authority
-    /// 2. `[]` user transfer authority
-    /// 3. `[w]` The account of the party to be liquidated
-    /// 4. `[w]` The account of the counterparty
-    /// 5. `[w]` The margin account of the party to be liquidated
-    /// 6. `[w]` The insurance fund
-    /// 8. `[]` The token program
+    /*
+        External actors should incentivized to invoke this instruction in order to take on the position
+        of an account that exceeded its margin requirements. This external party will receive a "bounty"
+        as compensation for the risk, and the liquidated account position will be tranferred to said party
+    */
     TryToLiquidate {},
 
-    /// Accounts expected:
-    /// 0. `[w]` PerpetualSwap (w because reference time needs to be updated)
-    /// 1. `[]` swap authority
-    /// 2. `[]` user transfer authority
-    /// 3. `[w]` The account of the party who is long
-    /// 4. `[w]` The account of the party who is short
-    /// 3. `[]` The token program
+    /*
+        The global PoolState will be updated to reflect the new difference between `indexPrice` and 
+        `markPrice`. As a result of this, everyone with an active position will be entitled to a updated
+        balance.
+    */
     TransferFunds {},
 
-    /// Accounts expected:
-    /// 0. `[]` PerpetualSwap
-    /// 1. `[]` swap authority
-    /// 2. `[]` user transfer authority
-    /// 3. `[]` The token program
+    /*
+        A external application will invoke this instruction to update the index and mark prices
+        TODO: fetch this prices from an on-chain oracle to remove existing parameters
+    */
     UpdatePrices {
         index_price: f64,
         mark_price: f64,

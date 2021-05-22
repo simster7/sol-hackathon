@@ -4,25 +4,34 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 #[repr(C)]
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
-pub struct PerpetualSwap {
-    pub is_long_initialized: bool,
-    pub is_short_initialized: bool,
-    pub nonce: u8,
-    pub token_program_id: Pubkey,
-    pub long_margin_pubkey: Pubkey,
-    pub long_account_pubkey: Pubkey,
-    pub short_margin_pubkey: Pubkey,
-    pub short_account_pubkey: Pubkey,
-    pub reference_time: u128,
-    pub index_price: f64,
-    pub mark_price: f64,
-    pub minimum_margin: u64,
-    pub liquidation_threshold: f64,
-    pub funding_rate: f64,
+struct AccountState {
+    collateral: f64,
+    position: f64,
+    avgEntryPrice: f64,
+    leverage: f64,
+}
+  
+#[repr(C)]
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+struct PoolState {
+    totalCollateral: f64,
+    openInterest: f64,
+    indexPrice: f64,
+    markPrice: f64,
+    fundingRate: f64, // probably a function of indexPrice, markPrice
+    lastFundingTime: Datetime
 }
 
-impl PerpetualSwap {
-    pub const LEN: usize = 218;
+impl AccounState {
+    pub const LEN: usize = 32;
+
+    pub fn is_initialized(&self) -> bool {
+        self.is_long_initialized && self.is_short_initialized
+    }
+}
+
+impl PoolState {
+    pub const LEN: usize = 48;
 
     pub fn is_initialized(&self) -> bool {
         self.is_long_initialized && self.is_short_initialized
