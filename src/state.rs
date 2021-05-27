@@ -51,7 +51,12 @@ struct FundingState {
     // funding events should be ordered first to last
 }
 
-struct FundingEvent(u64, f64);
+struct FundingEvent{
+    timestamp: Timestamp,
+    rate: f64,
+    funding_size: u64,
+    event_pool_pos: u64,
+}
 
 impl AccountState {
     pub const LEN: usize = 32;
