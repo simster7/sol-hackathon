@@ -140,10 +140,8 @@ impl PerpetualSwapInstruction {
             6 => {
                 let (index_price, _rest) = Self::unpack_f64(rest)?;
                 let (mark_price, _rest) = Self::unpack_f64(rest)?;
-                Self::UpdatePrices {
-                    index_price,
-                    mark_price,
-                }
+
+                Self::UpdatePrices { index_price, mark_price }
             }
             _ => return Err(PerpetualSwapError::InvalidInstruction.into()),
         })
