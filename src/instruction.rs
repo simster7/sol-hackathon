@@ -19,8 +19,8 @@ pub enum PerpetualSwapInstruction {
     InitializePerpetualSwap {
         nonce: u8,
         funding_rate: f64,
-        minimum_margin: u64,
-        liquidation_bounty: u64,
+        minimum_margin: f64,
+        liquidation_bounty: f64,
     },
 
     /// Accounts expected:
@@ -115,8 +115,8 @@ impl PerpetualSwapInstruction {
                     .split_first()
                     .ok_or(PerpetualSwapError::InvalidInstruction)?;
                 let (funding_rate, rest) = Self::unpack_f64(rest)?;
-                let (minimum_margin, rest) = Self::unpack_u64(rest)?;
-                let (liquidation_bounty, _rest) = Self::unpack_u64(rest)?;
+                let (minimum_margin, rest) = Self::unpack_f64(rest)?;
+                let (liquidation_bounty, _rest) = Self::unpack_f64(rest)?;
                 Self::InitializePerpetualSwap {
                     nonce,
                     funding_rate,

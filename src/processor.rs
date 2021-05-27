@@ -188,8 +188,8 @@ impl Processor {
         program_id: &Pubkey,
         nonce: u8,
         funding_rate: f64,
-        minimum_margin: u64,
-        liquidation_bounty: u64,
+        minimum_margin: f64,
+        liquidation_bounty: f64,
         accounts: &[AccountInfo],
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
@@ -310,7 +310,7 @@ impl Processor {
             return Err(PerpetualSwapError::InvalidAccountKeys.into());
         }
 
-        if amount_to_deposit < perpetual_swap.minimum_margin {
+        if 1.0 - ((amount_to_deposit as f64) / perpetual_swap.mark_price) < perpetual_swap.minimum_margin {
             return Err(PerpetualSwapError::WouldBeLiquidated.into());
         }
 
@@ -441,7 +441,7 @@ impl Processor {
             return Err(PerpetualSwapError::InvalidAccountKeys.into());
         }
 
-        if source_account.amount - amount_to_withdraw < perpetual_swap.minimum_margin {
+        if 1.0 - (((source_account.amount - amount_to_withdraw) as f64) / perpetual_swap.mark_price) < perpetual_swap.minimum_margin {
             return Err(PerpetualSwapError::WouldBeLiquidated.into());
         }
 
@@ -501,7 +501,7 @@ impl Processor {
             return Err(PerpetualSwapError::InvalidMints.into());
         }
 
-        if margin_amount < perpetual_swap.minimum_margin {
+        if 1.0 - (margin_amount as f64 / perpetual_swap.mark_price) < perpetual_swap.minimum_margin {
             return Err(PerpetualSwapError::InsufficientMargin.into());
         }
 
@@ -698,7 +698,7 @@ impl Processor {
         let liquidator_account =
             Self::unpack_token_account(liquidator_account_info, &perpetual_swap.token_program_id)?;
 
-        if liquidated_margin.amount > perpetual_swap.minimum_margin {
+        if 1.0 - ((liquidated_margin.amount as f64) / perpetual_swap.mark_price) > perpetual_swap.minimum_margin {
             return Err(PerpetualSwapError::DoesNotNeedLiquidation.into());
         }
 
@@ -706,11 +706,11 @@ impl Processor {
             return Err(PerpetualSwapError::InvalidAccountKeys.into());
         }
 
-        if liquidator_account.amount + perpetual_swap.liquidation_bounty < perpetual_swap.minimum_margin {
+        let bounty = (perpetual_swap.liquidation_bounty * liquidated_margin.amount as f64) as u64;
+        if (1.0 - ((liquidator_account.amount + bounty) as f64) / perpetual_swap.mark_price) < perpetual_swap.minimum_margin {
             return Err(PerpetualSwapError::InsufficientFunds.into());
         }
         
-        let bounty = if perpetual_swap.liquidation_bounty < liquidated_margin.amount { perpetual_swap.liquidation_bounty } else { liquidated_margin.amount };
         let remaining_balance = liquidated_margin.amount - bounty;
         // Liquidate the user who is past margin
         Self::token_transfer(
@@ -733,18 +733,7 @@ impl Processor {
                 perpetual_swap.nonce,
                 liquidated_margin.amount - bounty,
             )?;
-        } else {
-            // Liquidator still needs to get his bounty
-            Self::token_transfer(
-                perpetual_swap_info.key,
-                token_program_info.clone(),
-                insurance_account_info.clone(),
-                liquidator_account_info.clone(),
-                user_transfer_authority_info.clone(),
-                perpetual_swap.nonce,
-                perpetual_swap.liquidation_bounty - bounty,
-            )?;
-        }
+        } 
 
         // Liquidator takes on the busted account position 
         Self::token_transfer(

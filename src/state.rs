@@ -16,8 +16,8 @@ pub struct PerpetualSwap {
     pub reference_time: u128,
     pub index_price: f64,
     pub mark_price: f64,
-    pub minimum_margin: u64,
-    pub liquidation_bounty: u64, // Percentage of the minimum margin that the liquidator receives
+    pub minimum_margin: f64,
+    pub liquidation_bounty: f64, // Percentage of the minimum margin that the liquidator receives
     pub funding_rate: f64,
 }
 
