@@ -177,7 +177,10 @@ impl Processor {
                 msg!("Instruction: TransferFunds");
                 Self::process_transfer_funds(program_id, accounts)
             }
-            PerpetualSwapInstruction::UpdatePrices { index_price, mark_price } => {
+            PerpetualSwapInstruction::UpdatePrices {
+                index_price,
+                mark_price,
+            } => {
                 msg!("Instruction: UpdatePrices");
                 Self::process_update_prices(program_id, index_price, mark_price, accounts)
             }
@@ -310,7 +313,9 @@ impl Processor {
             return Err(PerpetualSwapError::InvalidAccountKeys.into());
         }
 
-        if 1.0 - ((amount_to_deposit as f64) / perpetual_swap.mark_price) < perpetual_swap.minimum_margin {
+        if 1.0 - ((amount_to_deposit as f64) / perpetual_swap.mark_price)
+            < perpetual_swap.minimum_margin
+        {
             return Err(PerpetualSwapError::WouldBeLiquidated.into());
         }
 
@@ -441,7 +446,9 @@ impl Processor {
             return Err(PerpetualSwapError::InvalidAccountKeys.into());
         }
 
-        if 1.0 - (((source_account.amount - amount_to_withdraw) as f64) / perpetual_swap.mark_price) < perpetual_swap.minimum_margin {
+        if 1.0 - (((source_account.amount - amount_to_withdraw) as f64) / perpetual_swap.mark_price)
+            < perpetual_swap.minimum_margin
+        {
             return Err(PerpetualSwapError::WouldBeLiquidated.into());
         }
 
@@ -501,7 +508,8 @@ impl Processor {
             return Err(PerpetualSwapError::InvalidMints.into());
         }
 
-        if 1.0 - (margin_amount as f64 / perpetual_swap.mark_price) < perpetual_swap.minimum_margin {
+        if 1.0 - (margin_amount as f64 / perpetual_swap.mark_price) < perpetual_swap.minimum_margin
+        {
             return Err(PerpetualSwapError::InsufficientMargin.into());
         }
 
@@ -698,19 +706,25 @@ impl Processor {
         let liquidator_account =
             Self::unpack_token_account(liquidator_account_info, &perpetual_swap.token_program_id)?;
 
-        if 1.0 - ((liquidated_margin.amount as f64) / perpetual_swap.mark_price) > perpetual_swap.minimum_margin {
+        if 1.0 - ((liquidated_margin.amount as f64) / perpetual_swap.mark_price)
+            > perpetual_swap.minimum_margin
+        {
             return Err(PerpetualSwapError::DoesNotNeedLiquidation.into());
         }
 
-        if !(*liquidated_margin_info.key == perpetual_swap.long_margin_pubkey || *liquidated_margin_info.key == perpetual_swap.short_margin_pubkey) {
+        if !(*liquidated_margin_info.key == perpetual_swap.long_margin_pubkey
+            || *liquidated_margin_info.key == perpetual_swap.short_margin_pubkey)
+        {
             return Err(PerpetualSwapError::InvalidAccountKeys.into());
         }
 
         let bounty = (perpetual_swap.liquidation_bounty * liquidated_margin.amount as f64) as u64;
-        if (1.0 - ((liquidator_account.amount + bounty) as f64) / perpetual_swap.mark_price) < perpetual_swap.minimum_margin {
+        if (1.0 - ((liquidator_account.amount + bounty) as f64) / perpetual_swap.mark_price)
+            < perpetual_swap.minimum_margin
+        {
             return Err(PerpetualSwapError::InsufficientFunds.into());
         }
-        
+
         let remaining_balance = liquidated_margin.amount - bounty;
         // Liquidate the user who is past margin
         Self::token_transfer(
@@ -731,11 +745,11 @@ impl Processor {
                 insurance_account_info.clone(),
                 user_transfer_authority_info.clone(),
                 perpetual_swap.nonce,
-                liquidated_margin.amount - bounty,
+                remaining_balance,
             )?;
-        } 
+        }
 
-        // Liquidator takes on the busted account position 
+        // Liquidator takes on the busted account position
         Self::token_transfer(
             perpetual_swap_info.key,
             token_program_info.clone(),
@@ -750,7 +764,7 @@ impl Processor {
     }
 
     pub fn process_update_prices(
-        program_id:&Pubkey,
+        program_id: &Pubkey,
         index_price: f64,
         mark_price: f64,
         accounts: &[AccountInfo],
@@ -776,9 +790,8 @@ impl Processor {
             return Err(PerpetualSwapError::IncorrectTokenProgramId.into());
         }
 
-        perpetual_swap.mark_price  = mark_price;
+        perpetual_swap.mark_price = mark_price;
         perpetual_swap.index_price = index_price;
         Ok(())
     }
-
 }

@@ -95,11 +95,7 @@ pub enum PerpetualSwapInstruction {
     /// 1. `[]` swap authority
     /// 2. `[]` user transfer authority
     /// 3. `[]` The token program
-    UpdatePrices {
-        index_price: f64,
-        mark_price: f64,
-    },
-
+    UpdatePrices { index_price: f64, mark_price: f64 },
 }
 
 impl PerpetualSwapInstruction {
@@ -144,7 +140,10 @@ impl PerpetualSwapInstruction {
             6 => {
                 let (index_price, _rest) = Self::unpack_f64(rest)?;
                 let (mark_price, _rest) = Self::unpack_f64(rest)?;
-                Self::UpdatePrices { index_price, mark_price }
+                Self::UpdatePrices {
+                    index_price,
+                    mark_price,
+                }
             }
             _ => return Err(PerpetualSwapError::InvalidInstruction.into()),
         })
