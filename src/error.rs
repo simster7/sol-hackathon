@@ -46,6 +46,8 @@ pub enum PerpetualSwapError {
     ExpectedAccount,
     #[error("AccountNotInitialized")]
     AccountNotInitialized,
+    #[error("DoesNotNeedLiquidation")]
+    DoesNotNeedLiquidation,
 }
 
 impl From<PerpetualSwapError> for ProgramError {

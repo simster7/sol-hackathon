@@ -137,7 +137,7 @@ impl Processor {
                 nonce,
                 funding_rate,
                 minimum_margin,
-                liquidation_threshold,
+                liquidation_bounty,
             } => {
                 msg!("Instruction: InitializePerpetualSwap");
                 Self::process_initialize_perpetual_swap(
@@ -145,7 +145,7 @@ impl Processor {
                     nonce,
                     funding_rate,
                     minimum_margin,
-                    liquidation_threshold,
+                    liquidation_bounty,
                     accounts,
                 )
             }
@@ -169,15 +169,18 @@ impl Processor {
                 msg!("Instruction: TransferShort");
                 Self::process_transfer_short(program_id, amount, accounts)
             }
-            PerpetualSwapInstruction::TryToLiquidate {} => {
+            PerpetualSwapInstruction::TryToLiquidate { collateral } => {
                 msg!("Instruction: TryToLiquidate");
-                Self::process_try_to_liquidate(program_id, accounts)
+                Self::process_try_to_liquidate(program_id, collateral, accounts)
             }
             PerpetualSwapInstruction::TransferFunds {} => {
                 msg!("Instruction: TransferFunds");
                 Self::process_transfer_funds(program_id, accounts)
             }
-            PerpetualSwapInstruction::UpdatePrices { index_price, mark_price } => {
+            PerpetualSwapInstruction::UpdatePrices {
+                index_price,
+                mark_price,
+            } => {
                 msg!("Instruction: UpdatePrices");
                 Self::process_update_prices(program_id, index_price, mark_price, accounts)
             }
@@ -188,8 +191,8 @@ impl Processor {
         program_id: &Pubkey,
         nonce: u8,
         funding_rate: f64,
-        minimum_margin: u64,
-        liquidation_threshold: f64,
+        minimum_margin: f64,
+        liquidation_bounty: f64,
         accounts: &[AccountInfo],
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
@@ -267,7 +270,7 @@ impl Processor {
         perpetual_swap.long_margin_pubkey = *margin_long_info.key;
         perpetual_swap.short_margin_pubkey = *margin_short_info.key;
         perpetual_swap.minimum_margin = minimum_margin;
-        perpetual_swap.liquidation_threshold = liquidation_threshold;
+        perpetual_swap.liquidation_bounty = liquidation_bounty;
         perpetual_swap.funding_rate = funding_rate;
         perpetual_swap
             .serialize(&mut *perpetual_swap_info.data.borrow_mut())
@@ -310,7 +313,9 @@ impl Processor {
             return Err(PerpetualSwapError::InvalidAccountKeys.into());
         }
 
-        if amount_to_deposit < perpetual_swap.minimum_margin {
+        if 1.0 - ((amount_to_deposit as f64) / perpetual_swap.mark_price)
+            < perpetual_swap.minimum_margin
+        {
             return Err(PerpetualSwapError::WouldBeLiquidated.into());
         }
 
@@ -441,7 +446,9 @@ impl Processor {
             return Err(PerpetualSwapError::InvalidAccountKeys.into());
         }
 
-        if source_account.amount - amount_to_withdraw < perpetual_swap.minimum_margin {
+        if 1.0 - (((source_account.amount - amount_to_withdraw) as f64) / perpetual_swap.mark_price)
+            < perpetual_swap.minimum_margin
+        {
             return Err(PerpetualSwapError::WouldBeLiquidated.into());
         }
 
@@ -501,7 +508,8 @@ impl Processor {
             return Err(PerpetualSwapError::InvalidMints.into());
         }
 
-        if margin_amount < perpetual_swap.minimum_margin {
+        if 1.0 - (margin_amount as f64 / perpetual_swap.mark_price) < perpetual_swap.minimum_margin
+        {
             return Err(PerpetualSwapError::InsufficientMargin.into());
         }
 
@@ -663,16 +671,15 @@ impl Processor {
 
     pub fn process_try_to_liquidate(
         program_id: &Pubkey,
+        collateral: u64,
         accounts: &[AccountInfo],
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
         let perpetual_swap_info = next_account_info(account_info_iter)?;
         let authority_info = next_account_info(account_info_iter)?;
         let user_transfer_authority_info = next_account_info(account_info_iter)?;
-        let long_margin_info = next_account_info(account_info_iter)?;
-        let long_account_info = next_account_info(account_info_iter)?;
-        let short_margin_info = next_account_info(account_info_iter)?;
-        let short_account_info = next_account_info(account_info_iter)?;
+        let liquidated_margin_info = next_account_info(account_info_iter)?;
+        let liquidator_account_info = next_account_info(account_info_iter)?;
         let insurance_account_info = next_account_info(account_info_iter)?;
         let token_program_info = next_account_info(account_info_iter)?;
 
@@ -684,6 +691,7 @@ impl Processor {
         if perpetual_swap_info.owner != program_id {
             return Err(ProgramError::IncorrectProgramId);
         }
+
         if *authority_info.key
             != Self::authority_id(program_id, perpetual_swap_info.key, perpetual_swap.nonce)?
         {
@@ -693,117 +701,70 @@ impl Processor {
             return Err(PerpetualSwapError::IncorrectTokenProgramId.into());
         }
 
-        let long_margin =
-            Self::unpack_token_account(long_margin_info, &perpetual_swap.token_program_id)?;
-        let long_account =
-            Self::unpack_token_account(long_account_info, &perpetual_swap.token_program_id)?;
-        let short_margin =
-            Self::unpack_token_account(short_margin_info, &perpetual_swap.token_program_id)?;
-        let short_account =
-            Self::unpack_token_account(short_account_info, &perpetual_swap.token_program_id)?;
+        let liquidated_margin =
+            Self::unpack_token_account(liquidated_margin_info, &perpetual_swap.token_program_id)?;
+        let liquidator_account =
+            Self::unpack_token_account(liquidator_account_info, &perpetual_swap.token_program_id)?;
 
-        let mut needs_liquidation = false;
-        let mut liquidated_margin_account_info = long_margin_info.clone();
-        let mut liquidated_user_account_info = long_account_info.clone();
-        let mut receiver_margin_account_info = short_margin_info.clone();
-        let mut receiver_user_account_info = short_account_info.clone();
-        let mut amount_owed = 0;
-        let mut amount_paid = 0;
-        let mut liquidation_fee = 0;
-        let mut receiver_margin_account_total = 0;
-        let mut returned_amount = 0;
-        if perpetual_swap.mark_price > perpetual_swap.index_price {
-            if long_account.amount <= perpetual_swap.minimum_margin {
-                needs_liquidation = true;
-                amount_owed = (perpetual_swap.mark_price - perpetual_swap.index_price) as u64;
-                amount_paid = std::cmp::min(amount_owed, long_margin.amount);
-                liquidation_fee = ((long_margin.amount - amount_paid) as f64
-                    * perpetual_swap.liquidation_threshold)
-                    as u64;
-                if long_account.amount > amount_paid + liquidation_fee {
-                    returned_amount = long_account.amount - amount_paid - liquidation_fee;
-                }
-            }
-        } else if short_account.amount <= perpetual_swap.minimum_margin {
-            needs_liquidation = true;
-            liquidated_margin_account_info = short_margin_info.clone();
-            liquidated_user_account_info = short_account_info.clone();
-            receiver_margin_account_info = long_margin_info.clone();
-            receiver_user_account_info = long_account_info.clone();
-            receiver_margin_account_total = long_account.amount;
-            amount_owed = (perpetual_swap.index_price - perpetual_swap.mark_price) as u64;
-            amount_paid = std::cmp::min(amount_owed, long_margin.amount);
-            liquidation_fee = ((short_margin.amount - amount_paid) as f64
-                * perpetual_swap.liquidation_threshold) as u64;
-            if short_account.amount > amount_paid + liquidation_fee {
-                returned_amount = short_account.amount - amount_paid - liquidation_fee;
-            }
+        if 1.0 - ((liquidated_margin.amount as f64) / perpetual_swap.mark_price)
+            > perpetual_swap.minimum_margin
+        {
+            return Err(PerpetualSwapError::DoesNotNeedLiquidation.into());
         }
 
-        if needs_liquidation {
-            // Clear the receiver's margin account
+        if !(*liquidated_margin_info.key == perpetual_swap.long_margin_pubkey
+            || *liquidated_margin_info.key == perpetual_swap.short_margin_pubkey)
+        {
+            return Err(PerpetualSwapError::InvalidAccountKeys.into());
+        }
+
+        let bounty = (perpetual_swap.liquidation_bounty * liquidated_margin.amount as f64) as u64;
+        if (1.0 - ((liquidator_account.amount + bounty) as f64) / perpetual_swap.mark_price)
+            < perpetual_swap.minimum_margin
+        {
+            return Err(PerpetualSwapError::InsufficientFunds.into());
+        }
+
+        let remaining_balance = liquidated_margin.amount - bounty;
+        // Liquidate the user who is past margin
+        Self::token_transfer(
+            perpetual_swap_info.key,
+            token_program_info.clone(),
+            liquidated_margin_info.clone(),
+            liquidator_account_info.clone(),
+            user_transfer_authority_info.clone(),
+            perpetual_swap.nonce,
+            bounty,
+        )?;
+        // Pay a liquidation fee to the insurance account
+        if remaining_balance > 0 {
             Self::token_transfer(
                 perpetual_swap_info.key,
                 token_program_info.clone(),
-                receiver_margin_account_info.clone(),
-                receiver_user_account_info.clone(),
+                liquidated_margin_info.clone(),
+                insurance_account_info.clone(),
                 user_transfer_authority_info.clone(),
                 perpetual_swap.nonce,
-                receiver_margin_account_total,
+                remaining_balance,
             )?;
-            // Liquidate the user who is past margin
-            Self::token_transfer(
-                perpetual_swap_info.key,
-                token_program_info.clone(),
-                liquidated_margin_account_info.clone(),
-                receiver_user_account_info.clone(),
-                user_transfer_authority_info.clone(),
-                perpetual_swap.nonce,
-                amount_paid,
-            )?;
-            // Pay a liquidation fee to the insurance account
-            if liquidation_fee > 0 {
-                Self::token_transfer(
-                    perpetual_swap_info.key,
-                    token_program_info.clone(),
-                    liquidated_margin_account_info.clone(),
-                    insurance_account_info.clone(),
-                    user_transfer_authority_info.clone(),
-                    perpetual_swap.nonce,
-                    liquidation_fee,
-                )?;
-            }
-            // Return any remaining funds to the liquidated user
-            if returned_amount > 0 {
-                Self::token_transfer(
-                    perpetual_swap_info.key,
-                    token_program_info.clone(),
-                    liquidated_margin_account_info.clone(),
-                    liquidated_user_account_info.clone(),
-                    user_transfer_authority_info.clone(),
-                    perpetual_swap.nonce,
-                    returned_amount,
-                )?;
-            }
-            // If the liquidated user cannot cover his/her losses, we pull from the insurance account
-            if amount_paid < amount_owed {
-                let insurance = amount_owed - amount_paid;
-                Self::token_transfer(
-                    perpetual_swap_info.key,
-                    token_program_info.clone(),
-                    insurance_account_info.clone(),
-                    receiver_user_account_info.clone(),
-                    user_transfer_authority_info.clone(),
-                    perpetual_swap.nonce,
-                    insurance,
-                )?;
-            }
         }
+
+        // Liquidator takes on the busted account position
+        Self::token_transfer(
+            perpetual_swap_info.key,
+            token_program_info.clone(),
+            liquidator_account_info.clone(),
+            liquidated_margin_info.clone(),
+            user_transfer_authority_info.clone(),
+            perpetual_swap.nonce,
+            collateral,
+        )?;
+
         Ok(())
     }
 
     pub fn process_update_prices(
-        program_id:&Pubkey,
+        program_id: &Pubkey,
         index_price: f64,
         mark_price: f64,
         accounts: &[AccountInfo],
@@ -829,9 +790,8 @@ impl Processor {
             return Err(PerpetualSwapError::IncorrectTokenProgramId.into());
         }
 
-        perpetual_swap.mark_price  = mark_price;
+        perpetual_swap.mark_price = mark_price;
         perpetual_swap.index_price = index_price;
         Ok(())
     }
-
 }
