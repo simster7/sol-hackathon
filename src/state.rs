@@ -42,12 +42,13 @@ struct PoolState {
 #[repr(C)]
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
 struct FundingState {
-    start_time: u64,
-    end_time: u64,
+    start_time: Datetime,
+    end_time: Datetime,
     net_rate: f64,
     prev_acct: Pubkey,
     next_acct: Pubkey,
     funding_events: [FundingEvent]
+    // funding events should be ordered first to last
 }
 
 struct FundingEvent(u64, f64);
@@ -71,15 +72,15 @@ impl PerpetualSwap {
 impl FundingState {
     pub const LEN: usize = 256; //or whatever the correct # is
 
-    pub fn new_funding_state(start_time: u64, prev_acct: Pubkey) -> bool {
+    pub fn new_funding_state(start_time: Datetime, prev_acct: Pubkey) -> bool {
 
     }
 
-    fn query_net_funding(&self, start_time: u64, side: bool) -> f64 {
+    fn query_net_funding(&self, start_time: Datetime, side: bool) -> f64 {
 
     }
 
-    fn update_funding(&self, funding_rate: f64, timestamp: u64) -> Result<(), ProgramError> {
+    fn update_funding(&self, funding_rate: f64, timestamp: Datetime) -> Result<(), ProgramError> {
 
     }
 }
