@@ -17,7 +17,7 @@ pub struct PerpetualSwap {
     pub index_price: f64,
     pub mark_price: f64,
     pub minimum_margin: u64,
-    pub liquidation_threshold: f64,
+    pub liquidation_bounty: u64, // Percentage of the minimum margin that the liquidator receives
     pub funding_rate: f64,
 }
 
@@ -48,7 +48,7 @@ mod test {
             index_price: 100.0,
             mark_price: 100.2,
             minimum_margin: 10,
-            liquidation_threshold: 0.2,
+            liquidation_bounty: 6,
             funding_rate: 0.8,
         };
         let packed = p.try_to_vec().unwrap();

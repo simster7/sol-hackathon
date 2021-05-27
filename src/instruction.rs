@@ -20,7 +20,7 @@ pub enum PerpetualSwapInstruction {
         nonce: u8,
         funding_rate: f64,
         minimum_margin: u64,
-        liquidation_threshold: f64,
+        liquidation_bounty: u64,
     },
 
     /// Accounts expected:
@@ -79,7 +79,7 @@ pub enum PerpetualSwapInstruction {
     /// 5. `[w]` The margin account of the party to be liquidated
     /// 6. `[w]` The insurance fund
     /// 8. `[]` The token program
-    TryToLiquidate {},
+    TryToLiquidate { collateral: u64 },
 
     /// Accounts expected:
     /// 0. `[w]` PerpetualSwap (w because reference time needs to be updated)
@@ -116,12 +116,12 @@ impl PerpetualSwapInstruction {
                     .ok_or(PerpetualSwapError::InvalidInstruction)?;
                 let (funding_rate, rest) = Self::unpack_f64(rest)?;
                 let (minimum_margin, rest) = Self::unpack_u64(rest)?;
-                let (liquidation_threshold, _rest) = Self::unpack_f64(rest)?;
+                let (liquidation_bounty, _rest) = Self::unpack_u64(rest)?;
                 Self::InitializePerpetualSwap {
                     nonce,
                     funding_rate,
                     minimum_margin,
-                    liquidation_threshold,
+                    liquidation_bounty,
                 }
             }
             1 => {
@@ -136,7 +136,10 @@ impl PerpetualSwapInstruction {
                 let (amount_to_withdraw, _rest) = Self::unpack_u64(rest)?;
                 Self::WithdrawFromMargin { amount_to_withdraw }
             }
-            4 => Self::TryToLiquidate {},
+            4 => {
+                let (collateral, _rest) = Self::unpack_u64(rest)?;
+                Self::TryToLiquidate { collateral }
+            }
             5 => Self::TransferFunds {},
             6 => {
                 let (index_price, _rest) = Self::unpack_f64(rest)?;
