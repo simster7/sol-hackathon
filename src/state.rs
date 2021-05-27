@@ -2,8 +2,6 @@ use solana_program::pubkey::Pubkey;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
-#[repr(C)]
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
 pub struct PerpetualSwap {
     pub is_long_initialized: bool,
     pub is_short_initialized: bool,
@@ -21,11 +19,68 @@ pub struct PerpetualSwap {
     pub funding_rate: f64,
 }
 
+#[repr(C)]
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+struct AccountState {
+    collateral: f64,
+    position: f64,
+    avgEntryPrice: f64,
+    leverage: f64,
+}
+
+#[repr(C)]
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+struct PoolState {
+    totalCollateral: f64,
+    openInterest: f64,
+    indexPrice: f64,
+    markPrice: f64,
+    fundingRate: f64, // probably a function of indexPrice, markPrice
+    lastFundingTime: Datetime
+}
+
+#[repr(C)]
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug, Clone)]
+struct FundingState {
+    start_time: u64,
+    end_time: u64,
+    net_rate: f64,
+    prev_acct: Pubkey,
+    next_acct: Pubkey,
+    funding_events: [FundingEvent]
+}
+
+struct FundingEvent(u64, f64);
+
+impl AccountState {
+    pub const LEN: usize = 32;
+
+    pub fn is_initialized(&self) -> bool {
+        self.is_long_initialized && self.is_short_initialized
+    }
+}
+
 impl PerpetualSwap {
     pub const LEN: usize = 218;
 
     pub fn is_initialized(&self) -> bool {
         self.is_long_initialized && self.is_short_initialized
+    }
+}
+
+impl FundingState {
+    pub const LEN: usize = 256; //or whatever the correct # is
+
+    pub fn new_funding_state(start_time: u64, prev_acct: Pubkey) -> bool {
+
+    }
+
+    fn query_net_funding(&self, start_time: u64, side: bool) -> f64 {
+
+    }
+
+    fn update_funding(&self, funding_rate: f64, timestamp: u64) -> Result<(), ProgramError> {
+
     }
 }
 
