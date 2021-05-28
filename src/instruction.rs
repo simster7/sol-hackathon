@@ -2,7 +2,7 @@ use solana_program::program_error::ProgramError;
 use std::convert::TryInto;
 
 use crate::error::PerpetualSwapError;
-use crate::unpackable::Unpackable;
+use crate::traits::Unpackable;
 
 pub enum PerpetualSwapInstruction {
     /// Accounts expected:
