@@ -14,6 +14,7 @@ pub struct PerpetualSwap {
     pub short_margin_pubkey: Pubkey,
     pub short_account_pubkey: Pubkey,
     pub reference_time: u128,
+    pub minimum_funding_period: u128,
     pub index_price: f64,
     pub mark_price: f64,
     pub minimum_margin: f64,
@@ -22,7 +23,7 @@ pub struct PerpetualSwap {
 }
 
 impl PerpetualSwap {
-    pub const LEN: usize = 218;
+    pub const LEN: usize = 234;
 
     pub fn is_initialized(&self) -> bool {
         self.is_long_initialized && self.is_short_initialized
@@ -45,10 +46,11 @@ mod test {
             short_margin_pubkey: Pubkey::new_unique(),
             short_account_pubkey: Pubkey::new_unique(),
             reference_time: 123456900,
+            minimum_funding_period: 28800000,
             index_price: 100.0,
             mark_price: 100.2,
-            minimum_margin: 10,
-            liquidation_bounty: 6,
+            minimum_margin: 10.0,
+            liquidation_bounty: 6.0,
             funding_rate: 0.8,
         };
         let packed = p.try_to_vec().unwrap();

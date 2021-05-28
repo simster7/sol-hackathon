@@ -138,6 +138,7 @@ impl Processor {
                 funding_rate,
                 minimum_margin,
                 liquidation_bounty,
+                minimum_funding_period,
             } => {
                 msg!("Instruction: InitializePerpetualSwap");
                 Self::process_initialize_perpetual_swap(
@@ -146,6 +147,7 @@ impl Processor {
                     funding_rate,
                     minimum_margin,
                     liquidation_bounty,
+                    minimum_funding_period,
                     accounts,
                 )
             }
@@ -193,6 +195,7 @@ impl Processor {
         funding_rate: f64,
         minimum_margin: f64,
         liquidation_bounty: f64,
+        minimum_funding_period: u128,
         accounts: &[AccountInfo],
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
@@ -272,6 +275,7 @@ impl Processor {
         perpetual_swap.minimum_margin = minimum_margin;
         perpetual_swap.liquidation_bounty = liquidation_bounty;
         perpetual_swap.funding_rate = funding_rate;
+        perpetual_swap.minimum_funding_period = minimum_funding_period;
         perpetual_swap
             .serialize(&mut *perpetual_swap_info.data.borrow_mut())
             .map_err(|e| e.into())
@@ -343,7 +347,7 @@ impl Processor {
 
         // Start the funding rate interval only when both parties have been set
         if perpetual_swap.is_initialized() {
-            // This is number of millisecondss ince the epoch
+            // This is number of milliseconds since the epoch
             perpetual_swap.reference_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -607,9 +611,9 @@ impl Processor {
         let short_margin_info = next_account_info(account_info_iter)?;
         let token_program_info = next_account_info(account_info_iter)?;
 
-        let mut perpetual_swap = PerpetualSwap::try_from_slice(&perpetual_swap_info.data.borrow())?;
+        let mut perpetual_swap: PerpetualSwap =
+            PerpetualSwap::try_from_slice(&perpetual_swap_info.data.borrow())?;
 
-        // TODO add more checks
         if !perpetual_swap.is_initialized() {
             return Err(PerpetualSwapError::AccountNotInitialized.into());
         }
@@ -633,6 +637,11 @@ impl Processor {
             return Err(PerpetualSwapError::InvalidTransferTime.into());
         }
         let time_since_last_transfer = transfer_time - perpetual_swap.reference_time;
+
+        if time_since_last_transfer < perpetual_swap.minimum_funding_period {
+            return Err(PerpetualSwapError::InvalidTransferTime.into());
+        }
+
         // funding_rate = base_funding rate * (amount of time since last transfer) / (# of ms in 1 day)
         let funding_interval = time_since_last_transfer as f64 / (24. * 60. * 60. * 1000.) as f64;
         let funding_rate = perpetual_swap.funding_rate * funding_interval;
