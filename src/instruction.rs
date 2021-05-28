@@ -2,7 +2,7 @@ use solana_program::program_error::ProgramError;
 use std::convert::TryInto;
 
 use crate::error::PerpetualSwapError;
-use crate::traits::{Unpackable, ByteDeserialize};
+use crate::traits::Unpackable;
 
 pub enum PerpetualSwapInstruction {
     /// Accounts expected:
@@ -155,7 +155,7 @@ impl PerpetualSwapInstruction {
         })
     }
 
-    fn unpack_fn<T: Unpackable + ByteDeserialize>(input: &[u8]) -> Result<(T, &[u8]), ProgramError> {
+    fn unpack_fn<T: Unpackable>(input: &[u8]) -> Result<(T, &[u8]), ProgramError> {
         if input.len() >= T::get_bytes() {
             let (amount, rest) = input.split_at(8);
             let amount = amount
