@@ -2,25 +2,28 @@ use solana_program::program_error::ProgramError;
 use std::convert::TryInto;
 
 use crate::error::PerpetualSwapError;
+use crate::unpackable::Unpackable;
+
 pub enum PerpetualSwapInstruction {
     /// Accounts expected:
-    /// 0. `[w, signer]` New PerpetrualSwap to create.
+    /// 0. `[w, signer]` New PerpetualSwap to create.
     /// 1. `[]` swap authority derived from `create_program_address(&[Token-swap account])`
-    /// 2. `[]` long margin acount
-    /// 3. `[]` long user acount
-    /// 4. `[]` short margin acount
-    /// 5. `[]` short user acount
+    /// 2. `[]` long margin account
+    /// 3. `[]` long user account
+    /// 4. `[]` short margin account
+    /// 5. `[]` short user account
     /// 6. `[w]` Pool Token Mint. Must be empty, owned by swap authority.
     /// 7. `[w]` Pool Token Account to deposit trading and withdraw fees.
     /// Must be empty, not owned by swap authority
     /// 8. `[w]` Pool Token Account to deposit the initial pool token
     /// supply.  Must be empty, not owned by swap authority.
-    /// 9. '[]` Token program id
+    /// 9. `[]` Token program id
     InitializePerpetualSwap {
         nonce: u8,
         funding_rate: f64,
         minimum_margin: f64,
         liquidation_bounty: f64,
+        minimum_funding_period: u128,
     },
 
     /// Accounts expected:
@@ -45,7 +48,7 @@ pub enum PerpetualSwapInstruction {
     /// 0. `[]` PerpetualSwap
     /// 1. `[]` swap authority
     /// 2. `[]` user transfer authority
-    /// 3. `[w]` The account of the person withrawing from the margin account
+    /// 3. `[w]` The account of the person withdrawing from the margin account
     /// 4. `[w, s]` The margin account
     /// 5. `[]` The token program
     WithdrawFromMargin { amount_to_withdraw: u64 },
@@ -110,64 +113,55 @@ impl PerpetualSwapInstruction {
                 let (&nonce, rest) = rest
                     .split_first()
                     .ok_or(PerpetualSwapError::InvalidInstruction)?;
-                let (funding_rate, rest) = Self::unpack_f64(rest)?;
-                let (minimum_margin, rest) = Self::unpack_f64(rest)?;
-                let (liquidation_bounty, _rest) = Self::unpack_f64(rest)?;
+                let (funding_rate, rest) = Self::unpack_fn::<f64>(rest)?;
+                let (minimum_margin, rest) = Self::unpack_fn::<f64>(rest)?;
+                let (liquidation_bounty, rest) = Self::unpack_fn::<f64>(rest)?;
+                let (minimum_funding_period, _rest) = Self::unpack_fn::<u128>(rest)?;
                 Self::InitializePerpetualSwap {
                     nonce,
                     funding_rate,
                     minimum_margin,
                     liquidation_bounty,
+                    minimum_funding_period,
                 }
             }
             1 => {
-                let (amount_to_deposit, _rest) = Self::unpack_u64(rest)?;
+                let (amount_to_deposit, _rest) = Self::unpack_fn::<u64>(rest)?;
                 Self::InitializeSide { amount_to_deposit }
             }
             2 => {
-                let (amount_to_deposit, _rest) = Self::unpack_u64(rest)?;
+                let (amount_to_deposit, _rest) = Self::unpack_fn::<u64>(rest)?;
                 Self::DepositToMargin { amount_to_deposit }
             }
             3 => {
-                let (amount_to_withdraw, _rest) = Self::unpack_u64(rest)?;
+                let (amount_to_withdraw, _rest) = Self::unpack_fn::<u64>(rest)?;
                 Self::WithdrawFromMargin { amount_to_withdraw }
             }
             4 => {
-                let (collateral, _rest) = Self::unpack_u64(rest)?;
+                let (collateral, _rest) = Self::unpack_fn::<u64>(rest)?;
                 Self::TryToLiquidate { collateral }
             }
             5 => Self::TransferFunds {},
             6 => {
-                let (index_price, _rest) = Self::unpack_f64(rest)?;
-                let (mark_price, _rest) = Self::unpack_f64(rest)?;
+                let (index_price, _rest) = Self::unpack_fn::<f64>(rest)?;
+                let (mark_price, _rest) = Self::unpack_fn::<f64>(rest)?;
 
-                Self::UpdatePrices { index_price, mark_price }
+                Self::UpdatePrices {
+                    index_price,
+                    mark_price,
+                }
             }
             _ => return Err(PerpetualSwapError::InvalidInstruction.into()),
         })
     }
 
-    fn unpack_u64(input: &[u8]) -> Result<(u64, &[u8]), ProgramError> {
-        if input.len() >= 8 {
+    fn unpack_fn<T: Unpackable>(input: &[u8]) -> Result<(T, &[u8]), ProgramError> {
+        if input.len() >= T::get_bytes() {
             let (amount, rest) = input.split_at(8);
             let amount = amount
-                .get(..8)
+                .get(..T::get_bytes())
                 .and_then(|slice| slice.try_into().ok())
-                .map(u64::from_le_bytes)
-                .ok_or(PerpetualSwapError::InvalidInstruction)?;
-            Ok((amount, rest))
-        } else {
-            Err(PerpetualSwapError::InvalidInstruction.into())
-        }
-    }
-
-    fn unpack_f64(input: &[u8]) -> Result<(f64, &[u8]), ProgramError> {
-        if input.len() >= 8 {
-            let (amount, rest) = input.split_at(8);
-            let amount = amount
-                .get(..8)
-                .and_then(|slice| slice.try_into().ok())
-                .map(f64::from_le_bytes)
+                .map(T::from_le_bytes)
                 .ok_or(PerpetualSwapError::InvalidInstruction)?;
             Ok((amount, rest))
         } else {
