@@ -6,18 +6,18 @@ use crate::unpackable::Unpackable;
 
 pub enum PerpetualSwapInstruction {
     /// Accounts expected:
-    /// 0. `[w, signer]` New PerpetrualSwap to create.
+    /// 0. `[w, signer]` New PerpetualSwap to create.
     /// 1. `[]` swap authority derived from `create_program_address(&[Token-swap account])`
-    /// 2. `[]` long margin acount
-    /// 3. `[]` long user acount
-    /// 4. `[]` short margin acount
-    /// 5. `[]` short user acount
+    /// 2. `[]` long margin account
+    /// 3. `[]` long user account
+    /// 4. `[]` short margin account
+    /// 5. `[]` short user account
     /// 6. `[w]` Pool Token Mint. Must be empty, owned by swap authority.
     /// 7. `[w]` Pool Token Account to deposit trading and withdraw fees.
     /// Must be empty, not owned by swap authority
     /// 8. `[w]` Pool Token Account to deposit the initial pool token
     /// supply.  Must be empty, not owned by swap authority.
-    /// 9. '[]` Token program id
+    /// 9. `[]` Token program id
     InitializePerpetualSwap {
         nonce: u8,
         funding_rate: f64,
@@ -48,7 +48,7 @@ pub enum PerpetualSwapInstruction {
     /// 0. `[]` PerpetualSwap
     /// 1. `[]` swap authority
     /// 2. `[]` user transfer authority
-    /// 3. `[w]` The account of the person withrawing from the margin account
+    /// 3. `[w]` The account of the person withdrawing from the margin account
     /// 4. `[w, s]` The margin account
     /// 5. `[]` The token program
     WithdrawFromMargin { amount_to_withdraw: u64 },
