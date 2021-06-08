@@ -99,6 +99,13 @@ pub enum PerpetualSwapInstruction {
     /// 2. `[]` user transfer authority
     /// 3. `[]` The token program
     UpdatePrices { index_price: f64, mark_price: f64 },
+
+    /// Accounts expected:
+    /// 0. `[w]` PerpetualSwap
+    /// 1. `[]` Pyth product info
+    /// 2. `[]` Pyth Price Info
+    OracleUpdateIndex {},
+
 }
 
 impl PerpetualSwapInstruction {
@@ -151,6 +158,7 @@ impl PerpetualSwapInstruction {
                     mark_price,
                 }
             }
+            7 => Self::OracleUpdateIndex{},
             _ => return Err(PerpetualSwapError::InvalidInstruction.into()),
         })
     }
