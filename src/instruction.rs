@@ -98,7 +98,9 @@ pub enum PerpetualSwapInstruction {
     /// 1. `[]` swap authority
     /// 2. `[]` user transfer authority
     /// 3. `[]` The token program
-    UpdatePrices { index_price: f64, mark_price: f64 },
+    /// 4. `[]` Pyth product info
+    /// 5. `[]` Pyth Price Info
+    UpdatePrices { mark_price: f64 },
 
     /// Accounts expected:
     /// 0. `[w]` PerpetualSwap
@@ -150,11 +152,9 @@ impl PerpetualSwapInstruction {
             }
             5 => Self::TransferFunds {},
             6 => {
-                let (index_price, _rest) = Self::unpack_fn::<f64>(rest)?;
                 let (mark_price, _rest) = Self::unpack_fn::<f64>(rest)?;
 
                 Self::UpdatePrices {
-                    index_price,
                     mark_price,
                 }
             }
