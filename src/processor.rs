@@ -186,6 +186,10 @@ impl Processor {
                 msg!("Instruction: UpdatePrices");
                 Self::process_update_prices(program_id, index_price, mark_price, accounts)
             }
+            PerpetualSwapInstruction::OracleUpdateIndex { } => {
+                msg!("Instruction: oracleUpdateindex");
+                Self::process_oracle_update_index(accounts)
+            }
         }
     }
 
@@ -802,5 +806,52 @@ impl Processor {
         perpetual_swap.mark_price = mark_price;
         perpetual_swap.index_price = index_price;
         Ok(())
+    }
+
+    pub fn process_oracle_update_index(
+        accounts: &[AccountInfo],
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+        let perpetual_swap_info = next_account_info(account_info_iter)?;
+        let pyth_product_info = next_account_info(account_info_iter)?;
+        let pyth_price_info = next_account_info(account_info_iter)?;
+
+        let pyth_product_data = &pyth_product_info.try_borrow_data()?;
+        let pyth_product = pyth_client::cast::<pyth_client::Product>(pyth_product_data);
+
+        if pyth_product.magic != pyth_client::MAGIC {
+            msg!("Pyth product account provided is not a valid Pyth account");
+            return Err(ProgramError::InvalidArgument.into());
+        }
+        if pyth_product.atype != pyth_client::AccountType::Product as u32 {
+            msg!("Pyth product account provided is not a valid Pyth product account");
+            return Err(ProgramError::InvalidArgument.into());
+        }
+        if pyth_product.ver != pyth_client::VERSION_1 {
+            msg!("Pyth product account provided has a different version than the Pyth client");
+            return Err(ProgramError::InvalidArgument.into());
+        }
+        if !pyth_product.px_acc.is_valid() {
+            msg!("Pyth product price account is invalid");
+            return Err(ProgramError::InvalidArgument.into());
+        }
+
+        let pyth_price_pubkey = Pubkey::new(&pyth_product.px_acc.val);
+        if &pyth_price_pubkey != pyth_price_info.key {
+            msg!("Pyth product price account does not match the Pyth price provided");
+            return Err(ProgramError::InvalidArgument.into());
+        }
+
+        let pyth_price_data = &pyth_price_info.try_borrow_data()?;
+        let pyth_price = pyth_client::cast::<pyth_client::Price>(pyth_price_data);
+
+
+        let mut perpetual_swap = PerpetualSwap::try_from_slice(&perpetual_swap_info.data.borrow())?;
+
+        let index_price = pyth_price.agg.price as f64;
+        perpetual_swap.index_price = index_price;
+
+        Ok(())
+
     }
 }
