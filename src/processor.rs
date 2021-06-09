@@ -180,11 +180,10 @@ impl Processor {
                 Self::process_transfer_funds(program_id, accounts)
             }
             PerpetualSwapInstruction::UpdatePrices {
-                index_price,
                 mark_price,
             } => {
                 msg!("Instruction: UpdatePrices");
-                Self::process_update_prices(program_id, index_price, mark_price, accounts)
+                Self::process_update_prices(program_id, mark_price, accounts)
             }
             PerpetualSwapInstruction::OracleUpdateIndex { } => {
                 msg!("Instruction: oracleUpdateindex");
@@ -776,9 +775,9 @@ impl Processor {
         Ok(())
     }
 
+
     pub fn process_update_prices(
         program_id: &Pubkey,
-        index_price: f64,
         mark_price: f64,
         accounts: &[AccountInfo],
     ) -> ProgramResult {
@@ -786,6 +785,8 @@ impl Processor {
         let perpetual_swap_info = next_account_info(account_info_iter)?;
         let authority_info = next_account_info(account_info_iter)?;
         let token_program_info = next_account_info(account_info_iter)?;
+        let pyth_product_info = next_account_info(account_info_iter)?;
+        let pyth_price_info = next_account_info(account_info_iter)?;
         let mut perpetual_swap = PerpetualSwap::try_from_slice(&perpetual_swap_info.data.borrow())?;
 
         if !perpetual_swap.is_initialized() {
@@ -803,19 +804,20 @@ impl Processor {
             return Err(PerpetualSwapError::IncorrectTokenProgramId.into());
         }
 
+        let index_price = Self::pyth_handle_prices(
+            pyth_product_info,
+            pyth_price_info,
+        )?;
+
         perpetual_swap.mark_price = mark_price;
         perpetual_swap.index_price = index_price;
         Ok(())
     }
 
-    pub fn process_oracle_update_index(
-        accounts: &[AccountInfo],
-    ) -> ProgramResult {
-        let account_info_iter = &mut accounts.iter();
-        let perpetual_swap_info = next_account_info(account_info_iter)?;
-        let pyth_product_info = next_account_info(account_info_iter)?;
-        let pyth_price_info = next_account_info(account_info_iter)?;
-
+    fn pyth_handle_prices(
+        pyth_product_info: &AccountInfo,
+        pyth_price_info: &AccountInfo,
+    ) -> Result<f64, ProgramError> {
         let pyth_product_data = &pyth_product_info.try_borrow_data()?;
         let pyth_product = pyth_client::cast::<pyth_client::Product>(pyth_product_data);
 
@@ -844,11 +846,27 @@ impl Processor {
 
         let pyth_price_data = &pyth_price_info.try_borrow_data()?;
         let pyth_price = pyth_client::cast::<pyth_client::Price>(pyth_price_data);
+        let price = pyth_price.agg.price as f64;
+        Ok(price)
+
+    }
+
+    pub fn process_oracle_update_index(
+        accounts: &[AccountInfo],
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+        let perpetual_swap_info = next_account_info(account_info_iter)?;
+        let pyth_product_info = next_account_info(account_info_iter)?;
+        let pyth_price_info = next_account_info(account_info_iter)?;
+
+        let index_price = Self::pyth_handle_prices(
+            pyth_product_info,
+            pyth_price_info,
+        )?;
 
 
         let mut perpetual_swap = PerpetualSwap::try_from_slice(&perpetual_swap_info.data.borrow())?;
 
-        let index_price = pyth_price.agg.price as f64;
         perpetual_swap.index_price = index_price;
 
         Ok(())
